@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Flappy Bird Mobile</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body {
+      margin: 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      background: linear-gradient(135deg, #74ebd5 0%, #ACB6E5 100%);
+      overflow: hidden;
+      font-family: Arial, sans-serif;
+    }
+    header {
+      position: absolute;
+      top: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      text-align: center;
+      color: #fff;
+      text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+    }
+    header h1 { margin: 0; font-size: 28px; }
+    header p { margin: 5px 0 0; font-size: 16px; }
+    .game-container {
+      border: 20px solid transparent;
+      padding: 5px;
+      border-image: url("https://www.transparenttextures.com/patterns/45-degree-fabric-light.png") 30 round;
+      display: inline-block;
+    }
+    canvas {
+      width: 100vw;
+      height: 100vh;
+      max-width: 400px;
+      max-height: 600px;
+      display: block;
+      background: #70c5ce;
+      border-radius: 10px;
+    }
+    .popup {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.6);
+      justify-content: center;
+      align-items: center;
+      z-index: 10;
+    }
+    .popup-content {
+      background: #fff;
+      padding: 30px 50px;
+      border-radius: 15px;
+      text-align: center;
+      box-shadow: 0 5px 20px rgba(0,0,0,0.4);
+    }
+    .popup-content h2 { margin-bottom: 25px; font-size: 28px; }
+    #retryBtn {
+      background: #4CAF50;
+      color: white;
+      border: none;
+      padding: 15px 30px;
+      border-radius: 10px;
+      cursor: pointer;
+      font-size: 20px;
+    }
+    #retryBtn:hover { background: #45a049; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Flappy Bird Clone</h1>
+    <p>Tap or Press Space to Play</p>
+  </header>
+  <div class="game-container">
+    <canvas id="gameCanvas" width="400" height="600"></canvas>
+  </div>
+  <div id="gameOverPopup" class="popup">
+    <div class="popup-content">
+      <h2>Game Over</h2>
+      <button id="retryBtn">Retry</button>
+    </div>
+  </div>
+  <script>
+    const canvas = document.getElementById("gameCanvas");
+    const ctx = canvas.getContext("2d");
+    const popup = document.getElementById("gameOverPopup");
+    const retryBtn = document.getElementById("retryBtn");
+    let frames = 0, gravity = 0.25, jump = 4.6;
+    let score = 0, gameOver = false, gameStarted = false;
+    const bgImg = new Image();
+    bgImg.src = "https://i.postimg.cc/bG1nFvxN/b2b084ad6061dfe2122302266ea8af58.png";
+    const birdImg = new Image();
+    birdImg.src = "https://i.postimg.cc/d791yZRd/bird.png";
+    const pipeImg = new Image();
+    pipeImg.src = "https://i.postimg.cc/YGf1jS0y/38-388476-flappy-bird-pipes-png-bottle-Photoroom.png";
+    const bgMusic = new Audio("bg.mp3"); bgMusic.loop = true; bgMusic.volume = 0.5;
+    const flapSound = new Audio("flap.mp3");
+    const hitSound = new Audio("hit.mp3");
+    const bird = {
+      x: 50, y: 150, w: 40, h: 30, velocity: 0,
+      draw() { ctx.drawImage(birdImg, this.x - this.w/2, this.y - this.h/2, this.w, this.h); },
+      update() {
+        if (!gameStarted) return;
+        this.velocity += gravity; this.y += this.velocity;
+        if (this.y + this.h/2 >= canvas.height || this.y - this.h/2 <= 0) endGame();
+      },
+      flap() { this.velocity = -jump; flapSound.currentTime = 0; flapSound.play().catch(()=>{}); }
+    };
+    const pipes = [];
+    function createPipe() {
+      const gap = 140;
+      const topHeight = Math.floor(Math.random() * (canvas.height - gap - 100)) + 50;
+      pipes.push({ x: canvas.width, y: 0, w: 60, h: topHeight, gap, passed: false });
+    }
+    function drawPipes() {
+      pipes.forEach(pipe => {
+        ctx.save(); ctx.translate(pipe.x + pipe.w/2, pipe.h); ctx.scale(1, -1);
+        ctx.drawImage(pipeImg, -pipe.w/2, 0, pipe.w, pipe.h); ctx.restore();
+        ctx.drawImage(pipeImg, pipe.x, pipe.h + pipe.gap, pipe.w, canvas.height - (pipe.h + pipe.gap));
+      });
+    }
+    function updatePipes() {
+      if (!gameStarted) return;
+      pipes.forEach(pipe => {
+        pipe.x -= 2;
+        if (bird.x + bird.w/2 > pipe.x && bird.x - bird.w/2 < pipe.x + pipe.w &&
+            (bird.y - bird.h/2 < pipe.h || bird.y + bird.h/2 > pipe.h + pipe.gap)) endGame();
+        if (!pipe.passed && pipe.x + pipe.w < bird.x) { score++; pipe.passed = true; }
+      });
+      if (pipes.length && pipes[0].x + pipes[0].w < 0) pipes.shift();
+    }
+    function drawScore() {
+      ctx.fillStyle = "#fff"; ctx.strokeStyle = "#000"; ctx.lineWidth = 3;
+      ctx.font = "32px Arial Black"; ctx.textAlign = "right";
+      ctx.strokeText(score, canvas.width - 20, 50); ctx.fillText(score, canvas.width - 20, 50);
+    }
+    function loop() {
+      ctx.clearRect(0,0,canvas.width,canvas.height);
+      ctx.drawImage(bgImg, 0,0,canvas.width,canvas.height);
+      bird.update(); bird.draw();
+      if (frames % 90 === 0 && gameStarted) createPipe();
+      updatePipes(); drawPipes(); drawScore();
+      if (!gameOver) { frames++; requestAnimationFrame(loop); }
+    }
+    function endGame() {
+      gameOver = true; hitSound.currentTime = 0; hitSound.play().catch(()=>{});
+      bgMusic.pause(); bgMusic.currentTime = 0; popup.style.display = "flex";
+    }
+    retryBtn.addEventListener("click", () => { popup.style.display = "none"; resetGame(); });
+    function resetGame() {
+      bird.y = 150; bird.velocity = 0; pipes.length = 0; score = 0; gameOver = false; frames = 0; gameStarted = false;
+      bgMusic.currentTime = 0; bgMusic.play().catch(()=>{}); loop();
+    }
+    function handleInput() {
+      if (!gameStarted) { gameStarted = true; bgMusic.play().catch(()=>{}); }
+      if (!gameOver) bird.flap();
+    }
+    document.addEventListener("keydown", e => { if (e.code === "Space") handleInput(); });
+    document.addEventListener("mousedown", handleInput);
+    document.addEventListener("touchstart", handleInput);
+    loop();
+  </script>
+</body>
+</html>
